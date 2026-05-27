@@ -1,3 +1,4 @@
+from http.server import BaseHTTPRequestHandler
 import json
 import requests
 import time
@@ -8,12 +9,21 @@ import re
 from datetime import datetime
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
-from http.server import BaseHTTPRequestHandler
 import sys
 import os
 
+# Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import MajorLoginRes_pb2
+
+try:
+    import MajorLoginRes_pb2
+except ImportError:
+    # Create empty placeholder if file missing
+    class MajorLoginRes_pb2:
+        class MajorLoginRes:
+            def ParseFromString(self, data):
+                pass
+    MajorLoginRes_pb2.MajorLoginRes = type('MajorLoginRes', (), {'ParseFromString': lambda self, data: None})
 
 # ============ CONSTANTS ============
 AES_KEY = bytes([89, 103, 38, 116, 99, 37, 68, 69, 117, 104, 54, 37, 90, 99, 94, 56])
@@ -67,6 +77,7 @@ def encrypt_api(plain_text):
     try:
         plain_bytes = bytes.fromhex(plain_text)
         cipher = AES.new(AES_KEY, AES.MODE_CBC, AES_IV)
+        from Crypto.Util.Padding import pad
         encrypted = cipher.encrypt(pad(plain_bytes, AES.block_size))
         return encrypted.hex()
     except:
@@ -111,7 +122,6 @@ def decode_jwt_token(jwt_token):
         pass
     return "N/A"
 
-# ============ PROTOBUF ENCODING ============
 def encode_varint(n):
     if n < 0:
         return b''
@@ -150,9 +160,9 @@ def create_proto(fields):
 def e_aes(plain_hex):
     plain_bytes = bytes.fromhex(plain_hex)
     cipher = AES.new(AES_KEY, AES.MODE_CBC, AES_IV)
+    from Crypto.Util.Padding import pad
     return cipher.encrypt(pad(plain_bytes, AES.block_size))
 
-# ============ CORE API FUNCTIONS ============
 def guest_token(uid, password, region='IND'):
     region_config = REGION_CONFIG.get(region, REGION_CONFIG['IND'])
     url = region_config['guest_url']
@@ -212,7 +222,7 @@ def parse_major_login_response(serialized_data):
     try:
         major_log_res = MajorLoginRes_pb2.MajorLoginRes()
         major_log_res.ParseFromString(serialized_data)
-        return major_log_res.token
+        return getattr(major_log_res, 'token', None)
     except:
         return None
 
@@ -302,55 +312,69 @@ def create_account(region, name_prefix):
         "password": password,
         "name": account_name,
         "region": region,
-        "account_id": account_id,
-        "jwt_token": jwt_token
+        "account_id": account_id
     }
 
+
 # ============ VERCEL HANDLER ============
-def handler(request, response):
-    """Vercel Python handler"""
-    # Set CORS headers
-    response.set_header('Access-Control-Allow-Origin', '*')
-    response.set_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+class handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
     
-    if request.method == 'OPTIONS':
-        response.status = 200
-        return response.send()
+    def do_GET(self):
+        self.handle_request()
     
-    # Get query parameters
-    name = request.query.get('name', ['TutorSensi'])[0][:9]
-    amount = request.query.get('amount', ['1'])[0]
-    server = request.query.get('server', ['ind'])[0]
+    def do_POST(self):
+        self.handle_request()
     
-    try:
-        count = min(max(1, int(amount)), 10)
-    except:
-        count = 1
-    
-    server_map = {
-        'bd': 'BD', 'ind': 'IND', 'pk': 'PK', 'id': 'ID',
-        'th': 'TH', 'vn': 'VN', 'br': 'BR', 'me': 'ME'
-    }
-    region = server_map.get(server.lower(), 'IND')
-    
-    accounts = []
-    errors = []
-    
-    for i in range(count):
+    def handle_request(self):
+        from urllib.parse import urlparse, parse_qs
+        
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        
+        name = params.get('name', ['TutorSensi'])[0][:9]
+        amount = params.get('amount', ['1'])[0]
+        server = params.get('server', ['ind'])[0]
+        
         try:
-            account = create_account(region, name)
-            accounts.append(account)
-            time.sleep(0.5)
-        except Exception as e:
-            errors.append({"attempt": i + 1, "error": str(e)})
-    
-    response.status = 200
-    response.set_header('Content-Type', 'application/json')
-    return response.json({
-        "success": len(accounts) > 0,
-        "credit": "TutorSensi",
-        "region": region,
-        "total_generated": len(accounts),
-        "accounts": accounts,
-        "errors": errors if errors else None
-    })
+            count = min(max(1, int(amount)), 10)
+        except:
+            count = 1
+        
+        server_map = {
+            'bd': 'BD', 'ind': 'IND', 'pk': 'PK', 'id': 'ID',
+            'th': 'TH', 'vn': 'VN', 'br': 'BR', 'me': 'ME'
+        }
+        region = server_map.get(server.lower(), 'IND')
+        
+        accounts = []
+        errors = []
+        
+        for i in range(count):
+            try:
+                account = create_account(region, name)
+                accounts.append(account)
+                time.sleep(0.3)
+            except Exception as e:
+                errors.append({"attempt": i + 1, "error": str(e)})
+        
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        
+        response = json.dumps({
+            "success": len(accounts) > 0,
+            "credit": "TutorSensi",
+            "region": region,
+            "total_generated": len(accounts),
+            "accounts": accounts,
+            "errors": errors if errors else None
+        })
+        
+        self.wfile.write(response.encode())
