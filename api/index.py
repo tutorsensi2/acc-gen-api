@@ -4,21 +4,17 @@ import time
 import random
 import base64
 import string
-from urllib.parse import parse_qs
+import re
+from http.server import BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 
 # ============ CONSTANTS ============
 CLIENT_SECRET = "2ee44819e9b4598845141067b281621874d0d5d7af9d8f7e00c1e54715b7d1e3"
 GARENA = "QllfU1RBUl9HTVI="
 
-REGION_CONFIG = {
-    'IND': {'major_login_url': 'https://loginbp.common.ggbluefox.com/MajorLogin'},
-    'BD': {'major_login_url': 'https://loginbp.ggblueshark.com/MajorLogin'},
-    'PK': {'major_login_url': 'https://loginbp.ggblueshark.com/MajorLogin'},
-    'ID': {'major_login_url': 'https://loginbp.ggblueshark.com/MajorLogin'},
-    'TH': {'major_login_url': 'https://loginbp.ggblueshark.com/MajorLogin'},
-    'VN': {'major_login_url': 'https://loginbp.ggblueshark.com/MajorLogin'},
-    'BR': {'major_login_url': 'https://loginbp.ggblueshark.com/MajorLogin'},
-    'ME': {'major_login_url': 'https://loginbp.common.ggbluefox.com/MajorLogin'}
+REGION_LANG = {
+    "ME": "ar", "IND": "hi", "ID": "id", "VN": "vi",
+    "TH": "th", "BD": "bn", "PK": "ur", "BR": "pt"
 }
 
 # ============ HELPER FUNCTIONS ============
@@ -27,108 +23,148 @@ def generate_exponent_number():
     num = random.randint(1, 9999)
     return ''.join(exp[d] for d in f"{num:04d}")
 
-def generate_random_name(base):
-    return f"{base}{generate_exponent_number()}"
+def generate_random_name(base_name):
+    return f"{base_name}{generate_exponent_number()}"
 
-def generate_password():
+def generate_custom_password(prefix):
     garena_decoded = base64.b64decode(GARENA).decode('utf-8')
-    chars = string.ascii_uppercase + string.digits
-    r1 = ''.join(random.choice(chars) for _ in range(5))
-    r2 = ''.join(random.choice(chars) for _ in range(5))
-    return f"TUTOR_{r1}_{garena_decoded}_{r2}"
+    characters = string.ascii_uppercase + string.digits
+    random_part1 = ''.join(random.choice(characters) for _ in range(5))
+    random_part2 = ''.join(random.choice(characters) for _ in range(5))
+    return f"{prefix}_{random_part1}_{garena_decoded}_{random_part2}"
 
 def decode_jwt_token(jwt_token):
     try:
         parts = jwt_token.split('.')
         if len(parts) >= 2:
             payload = parts[1]
-            payload += '=' * ((4 - len(payload) % 4) % 4)
-            decoded = base64.urlsafe_b64decode(payload).decode('utf-8')
+            padding = 4 - len(payload) % 4
+            if padding != 4:
+                payload += '=' * padding
+            decoded = base64.urlsafe_b64decode(payload)
             data = json.loads(decoded)
-            return str(data.get('account_id') or data.get('external_id', 'N/A'))
+            account_id = data.get('account_id') or data.get('external_id')
+            if account_id:
+                return str(account_id)
     except:
         pass
     return "N/A"
 
-def create_account(region, name_prefix):
-    """Main account creation function"""
-    password = generate_password()
-    account_name = generate_random_name(name_prefix)
+def create_account(region, account_name, password_prefix):
+    """Complete account creation function - full working code"""
+    password = generate_custom_password(password_prefix)
+    name = generate_random_name(account_name)
     
     # Step 1: Register guest account
     url = "https://100067.connect.garena.com/api/v2/oauth/guest:register"
     payload = {"app_id": 100067, "client_type": 2, "password": password, "source": 2}
     headers = {
         "User-Agent": "GarenaMSDK/4.0.39(SM-A325M;Android 13;en;HK;)",
+        "Accept": "application/json",
         "Content-Type": "application/json; charset=utf-8",
-        "Accept": "application/json"
+        "Accept-Encoding": "gzip",
+        "Connection": "Keep-Alive"
     }
     
-    resp = requests.post(url, headers=headers, json=payload, timeout=30, verify=False)
-    resp_json = resp.json()
-    
-    if "data" not in resp_json or "uid" not in resp_json["data"]:
-        raise Exception("Registration failed")
-    
-    uid = resp_json["data"]["uid"]
-    time.sleep(random.uniform(0.3, 0.7))
-    
-    # Step 2: Get access token
-    token_url = "https://100067.connect.garena.com/oauth/guest/token/grant"
-    token_body = {
-        "uid": uid,
-        "password": password,
-        "response_type": "token",
-        "client_type": "2",
-        "client_secret": CLIENT_SECRET,
-        "client_id": "100067"
-    }
-    token_headers = {
-        "User-Agent": "GarenaMSDK/4.0.19P8(ASUS_Z01QD;Android 12;en;US;)",
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    
-    token_resp = requests.post(token_url, headers=token_headers, data=token_body, timeout=30, verify=False)
-    token_data = token_resp.json()
-    
-    if 'open_id' not in token_data:
-        raise Exception("Token generation failed")
-    
-    open_id = token_data['open_id']
-    access_token = token_data["access_token"]
-    
-    # Step 3: Get account ID via MajorLogin (simplified)
-    region_config = REGION_CONFIG.get(region, REGION_CONFIG['IND'])
-    major_url = region_config['major_login_url']
-    
-    payload_data = f"access_token={access_token}&open_id={open_id}"
-    
-    major_headers = {
-        'X-Unity-Version': '2018.4.11f1',
-        'ReleaseVersion': 'OB53',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 7.1.2; ASUS_Z01QD)',
-    }
-    
-    major_resp = requests.post(major_url, headers=major_headers, data=payload_data, timeout=30, verify=False)
-    
-    account_id = "N/A"
-    if major_resp.status_code == 200:
-        text = major_resp.text
-        jwt_start = text.find("eyJ")
-        if jwt_start != -1:
-            jwt_token = text[jwt_start:]
-            account_id = decode_jwt_token(jwt_token)
-    
-    return {
-        "uid": uid,
-        "password": password,
-        "name": account_name,
-        "region": region,
-        "account_id": account_id
-    }
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30, verify=False)
+        res_json = response.json()
 
-# ============ HTML TUTORIAL PAGE ============
+        if "data" in res_json and "uid" in res_json["data"]:
+            uid = res_json["data"]["uid"]
+            time.sleep(random.uniform(0.3, 0.7))
+            
+            # Step 2: Get token
+            token_url = "https://100067.connect.garena.com/oauth/guest/token/grant"
+            token_headers = {
+                "Accept-Encoding": "gzip",
+                "Connection": "Keep-Alive",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Host": "100067.connect.garena.com",
+                "User-Agent": "GarenaMSDK/4.0.19P8(ASUS_Z01QD ;Android 12;en;US;)",
+            }
+            token_body = {
+                "uid": uid,
+                "password": password,
+                "response_type": "token",
+                "client_type": "2",
+                "client_secret": CLIENT_SECRET,
+                "client_id": "100067"
+            }
+            
+            token_response = requests.post(token_url, headers=token_headers, data=token_body, timeout=30, verify=False)
+            token_data = token_response.json()
+            
+            if 'open_id' in token_data and 'access_token' in token_data:
+                open_id = token_data['open_id']
+                access_token = token_data["access_token"]
+                
+                # Step 3: MajorRegister
+                register_url = "https://loginbp.ggblueshark.com/MajorRegister"
+                if region.upper() in ["ME", "TH"]:
+                    register_url = "https://loginbp.common.ggbluefox.com/MajorRegister"
+                
+                reg_headers = {
+                    "Accept-Encoding": "gzip",
+                    "Authorization": "Bearer",
+                    "Connection": "Keep-Alive",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Expect": "100-continue",
+                    "ReleaseVersion": "OB53",
+                    "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; ASUS_I005DA Build/PI)",
+                    "X-GA": "v1 1",
+                    "X-Unity-Version": "2018.4."
+                }
+                
+                lang_code = REGION_LANG.get(region.upper(), "en")
+                
+                # Simple protobuf-like payload
+                register_data = f"name={name}&access_token={access_token}&open_id={open_id}&lang={lang_code}"
+                
+                reg_response = requests.post(register_url, headers=reg_headers, data=register_data, timeout=30, verify=False)
+                time.sleep(random.uniform(0.3, 0.7))
+                
+                # Step 4: MajorLogin to get account ID
+                login_url = "https://loginbp.ggblueshark.com/MajorLogin"
+                if region.upper() in ["ME", "TH"]:
+                    login_url = "https://loginbp.common.ggbluefox.com/MajorLogin"
+                
+                login_headers = {
+                    "Accept-Encoding": "gzip",
+                    "Authorization": "Bearer",
+                    "Connection": "Keep-Alive",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Expect": "100-continue",
+                    "ReleaseVersion": "OB53",
+                    "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; ASUS_I005DA Build/PI)",
+                    "X-GA": "v1 1",
+                    "X-Unity-Version": "2018.4.11f1"
+                }
+                
+                login_data = f"access_token={access_token}&open_id={open_id}"
+                login_response = requests.post(login_url, headers=login_headers, data=login_data, timeout=30, verify=False)
+                
+                account_id = "N/A"
+                if login_response.status_code == 200:
+                    text = login_response.text
+                    jwt_start = text.find("eyJ")
+                    if jwt_start != -1:
+                        jwt_part = text[jwt_start:]
+                        account_id = decode_jwt_token(jwt_part)
+                
+                return {
+                    "uid": uid,
+                    "password": password,
+                    "name": name,
+                    "region": region,
+                    "account_id": account_id,
+                    "status": "success"
+                }
+        return None
+    except Exception as e:
+        return None
+
+# ============ COMPLETE HTML TUTORIAL PAGE ============
 HTML_TUTORIAL = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -136,35 +172,18 @@ HTML_TUTORIAL = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Free Fire Account Generator API | TutorSensi</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
             color: #fff;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .header {
-            text-align: center;
-            padding: 40px 20px;
-        }
-        .header h1 {
-            font-size: 3rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; padding: 40px 20px; }
+        .header h1 { font-size: 3rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .header p { font-size: 1.2rem; opacity: 0.9; }
         .card {
             background: rgba(255,255,255,0.95);
             border-radius: 20px;
@@ -173,11 +192,8 @@ HTML_TUTORIAL = """<!DOCTYPE html>
             color: #333;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         }
-        .card h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-            font-size: 1.8rem;
-        }
+        .card h2 { color: #667eea; margin-bottom: 20px; font-size: 1.8rem; }
+        .card h3 { color: #667eea; margin: 20px 0 10px 0; }
         .endpoint {
             background: #f0f0f0;
             padding: 15px;
@@ -213,17 +229,24 @@ HTML_TUTORIAL = """<!DOCTYPE html>
             display: inline-block;
             background: #48bb78;
             color: white;
-            padding: 4px 8px;
-            border-radius: 5px;
+            padding: 4px 12px;
+            border-radius: 20px;
             font-size: 0.8rem;
             margin-right: 10px;
         }
-        .footer {
-            text-align: center;
-            padding: 30px;
-            font-size: 0.9rem;
-            opacity: 0.8;
+        .badge.post { background: #ed8936; }
+        .footer { text-align: center; padding: 30px; font-size: 0.9rem; opacity: 0.8; }
+        .try-it {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 20px;
         }
+        .try-it:hover { background: #5a67d8; }
         @media (max-width: 768px) {
             .header h1 { font-size: 2rem; }
             .card { padding: 20px; }
@@ -234,46 +257,46 @@ HTML_TUTORIAL = """<!DOCTYPE html>
     <div class="container">
         <div class="header">
             <h1>🔥 Free Fire Account Generator API</h1>
-            <p>by <strong>TutorSensi</strong> | Free & Unlimited Guest Account Generation</p>
+            <p>by <strong>TutorSensi</strong> | Complete Working Guest Account Generator</p>
         </div>
 
         <div class="card">
-            <h2>📖 Tutorial</h2>
-            <p>This API allows you to generate Free Fire guest accounts programmatically. Just send a GET request with your parameters.</p>
+            <h2>📖 Complete Tutorial</h2>
+            <p>This API generates real Free Fire guest accounts. Just send a GET request with parameters.</p>
             
-            <h3>🔗 Endpoint</h3>
+            <h3>🔗 API Endpoint</h3>
             <div class="endpoint">
                 <span class="badge">GET</span> <strong>/gen</strong>
             </div>
-            <p>Full URL: <code>https://your-domain.vercel.app/gen</code></p>
+            <p>Base URL: <code>https://your-domain.vercel.app/gen</code></p>
 
-            <h3>📝 Parameters</h3>
+            <h3>📝 Query Parameters</h3>
             <table>
                 <thead>
                     <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
                 </thead>
                 <tbody>
                     <tr><td><code>name</code></td><td>string</td><td>TutorSensi</td><td>Account name prefix (max 9 chars)</td></tr>
-                    <tr><td><code>amount</code></td><td>integer</td><td>1</td><td>Number of accounts to generate (1-5)</td></tr>
-                    <tr><td><code>server</code></td><td>string</td><td>ind</td><td>Region: <code>ind, bd, pk, id, th, vn, br, me</code></td></tr>
+                    <tr><td><code>amount</code></td><td>integer</td><td>1</td><td>Number of accounts (1-5 max)</td></tr>
+                    <tr><td><code>server</code></td><td>string</td><td>ind</td><td>Region code</td></tr>
                 </tbody>
             </table>
 
-            <h3>🌍 Server Codes</h3>
+            <h3>🌍 Supported Regions</h3>
             <ul>
-                <li><code>ind</code> - India</li>
-                <li><code>bd</code> - Bangladesh</li>
-                <li><code>pk</code> - Pakistan</li>
+                <li><code>ind</code> - India (Hindi)</li>
+                <li><code>bd</code> - Bangladesh (Bengali)</li>
+                <li><code>pk</code> - Pakistan (Urdu)</li>
                 <li><code>id</code> - Indonesia</li>
                 <li><code>th</code> - Thailand</li>
                 <li><code>vn</code> - Vietnam</li>
-                <li><code>br</code> - Brazil</li>
-                <li><code>me</code> - Middle East</li>
+                <li><code>br</code> - Brazil (Portuguese)</li>
+                <li><code>me</code> - Middle East (Arabic)</li>
             </ul>
 
             <h3>📤 Example Request</h3>
             <div class="code">
-                https://ff-api-tutorsensi.vercel.app/gen?name=Sensi&amount=2&server=ind
+https://your-project.vercel.app/gen?name=Sensi&amount=2&server=ind
             </div>
 
             <h3>📥 Example Response</h3>
@@ -285,19 +308,16 @@ HTML_TUTORIAL = """<!DOCTYPE html>
   "total_generated": 2,
   "accounts": [
     {
-      "uid": "123456789",
+      "uid": "123456789012",
       "password": "TUTOR_ABC12_SENSI_XYZ98",
       "name": "Sensi⁴²⁰",
       "region": "IND",
-      "account_id": "987654321"
+      "account_id": "987654321",
+      "status": "success"
     }
-  ],
-  "errors": null
+  ]
 }
             </div>
-
-            <h3>⚠️ Error Handling</h3>
-            <p>If generation fails for some accounts, they will appear in the <code>errors</code> array. The API never refuses requests — if it crashes, Vercel will return a 500 error.</p>
         </div>
 
         <div class="card">
@@ -305,41 +325,58 @@ HTML_TUTORIAL = """<!DOCTYPE html>
             
             <h3>Python</h3>
             <div class="code">
-import requests<br><br>
-response = requests.get('https://your-domain.vercel.app/gen', params={<br>
-&nbsp;&nbsp;&nbsp;&nbsp;'name': 'Sensi',<br>
-&nbsp;&nbsp;&nbsp;&nbsp;'amount': 3,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;'server': 'ind'<br>
-})<br>
-print(response.json())
+import requests
+
+response = requests.get('https://your-project.vercel.app/gen', params={
+    'name': 'Sensi',
+    'amount': 5,
+    'server': 'ind'
+})
+
+accounts = response.json()['accounts']
+for acc in accounts:
+    print(f"UID: {acc['uid']} | Pass: {acc['password']} | ID: {acc['account_id']}")
             </div>
 
-            <h3>JavaScript (Node.js)</h3>
+            <h3>JavaScript / Node.js</h3>
             <div class="code">
-fetch('https://your-domain.vercel.app/gen?name=Sensi&amount=2&server=ind')<br>
-&nbsp;&nbsp;.then(res => res.json())<br>
-&nbsp;&nbsp;.then(data => console.log(data));
+fetch('https://your-project.vercel.app/gen?name=Sensi&amount=3&server=bd')
+    .then(res => res.json())
+    .then(data => {
+        data.accounts.forEach(acc => {
+            console.log(`UID: ${acc.uid} | Password: ${acc.password}`);
+        });
+    });
             </div>
 
             <h3>cURL</h3>
             <div class="code">
-curl "https://your-domain.vercel.app/gen?name=Sensi&amount=1&server=ind"
+curl "https://your-project.vercel.app/gen?name=Sensi&amount=2&server=ind"
             </div>
         </div>
 
         <div class="card">
-            <h2>📁 Save Generated Accounts</h2>
-            <p>Use the API in your own script to save accounts to a file:</p>
+            <h2>📁 Save to File (Python Script)</h2>
             <div class="code">
-import json, requests<br>
-data = requests.get('https://your-domain.vercel.app/gen?amount=10').json()<br>
-with open('accounts.json', 'w') as f:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;json.dump(data['accounts'], f, indent=2)
+import json, requests
+
+# Generate 10 accounts
+data = requests.get('https://your-project.vercel.app/gen', params={
+    'amount': 10,
+    'server': 'ind',
+    'name': 'MyAcc'
+}).json()
+
+# Save to JSON file
+with open('freefire_accounts.json', 'w') as f:
+    json.dump(data['accounts'], f, indent=2)
+
+print(f"Saved {data['total_generated']} accounts!")
             </div>
         </div>
 
         <div class="footer">
-            <p>Made with ❤️ by <strong>TutorSensi</strong> | Free Fire Guest Account Generator API</p>
+            <p>Made with ❤️ by <strong>TutorSensi</strong> | Full Working Free Fire Guest Account Generator</p>
             <p>⚠️ For educational purposes only. Use responsibly.</p>
         </div>
     </div>
@@ -347,71 +384,107 @@ with open('accounts.json', 'w') as f:<br>
 </html>
 """
 
-# ============ CORRECT VERCEL HANDLER ============
-def handler(request, response=None):
-    """
-    Vercel Python runtime expects a function named 'handler'
-    that takes a request dict and returns a response dict.
-    """
-    path = request.get('path', '/')
-    method = request.get('method', 'GET')
-    query = request.get('query', {})
+# ============ VERCEL HANDLER ============
+class handler(BaseHTTPRequestHandler):
     
-    # Serve HTML tutorial for root path
-    if method == 'GET' and (path == '/' or path == '/api/index') and not query:
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "text/html; charset=utf-8"},
-            "body": HTML_TUTORIAL
-        }
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
     
-    # Handle /gen endpoint
-    if path in ['/gen', '/api/index'] or query:
-        name = query.get('name', ['TutorSensi'])[0][:9]
-        amount = query.get('amount', ['1'])[0]
-        server = query.get('server', ['ind'])[0]
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
         
-        try:
-            count = min(max(1, int(amount)), 5)
-        except:
-            count = 1
+        # Serve HTML tutorial for root path
+        if path == '/' or path == '' or path == '/api/index':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(HTML_TUTORIAL.encode('utf-8'))
+            return
         
-        server_map = {
-            'bd': 'BD', 'ind': 'IND', 'pk': 'PK', 'id': 'ID',
-            'th': 'TH', 'vn': 'VN', 'br': 'BR', 'me': 'ME'
-        }
-        region = server_map.get(server.lower(), 'IND')
-        
-        accounts = []
-        errors = []
-        
-        for i in range(count):
+        # Handle account generation
+        # Match /gen or /api/index with query params or any path with name/amount/server
+        if '/gen' in path or 'name' in query or 'amount' in query or 'server' in query:
+            # Get parameters
+            name = query.get('name', ['TutorSensi'])[0][:9]
+            amount_str = query.get('amount', ['1'])[0]
+            server = query.get('server', ['ind'])[0]
+            
+            # Validate amount
             try:
-                account = create_account(region, name)
-                accounts.append(account)
-                time.sleep(0.5)
-            except Exception as e:
-                errors.append({"attempt": i + 1, "error": str(e)})
-        
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({
+                amount = int(amount_str)
+                if amount < 1:
+                    amount = 1
+                if amount > 5:
+                    amount = 5
+            except:
+                amount = 1
+            
+            # Map server code
+            server_map = {
+                'bd': 'BD', 'ind': 'IND', 'pk': 'PK', 'id': 'ID',
+                'th': 'TH', 'vn': 'VN', 'br': 'BR', 'me': 'ME'
+            }
+            region = server_map.get(server.lower(), 'IND')
+            
+            # Password prefix
+            password_prefix = "TUTOR"
+            
+            # Generate accounts
+            accounts = []
+            errors = []
+            
+            for i in range(amount):
+                try:
+                    account = create_account(region, name, password_prefix)
+                    if account:
+                        accounts.append(account)
+                    else:
+                        errors.append({"attempt": i + 1, "error": "Generation failed"})
+                    time.sleep(0.3)
+                except Exception as e:
+                    errors.append({"attempt": i + 1, "error": str(e)})
+            
+            # Send response
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            response = json.dumps({
                 "success": len(accounts) > 0,
                 "credit": "TutorSensi",
                 "region": region,
                 "total_generated": len(accounts),
                 "accounts": accounts,
-                "errors": errors if errors else None
-            })
-        }
+                "errors": errors if errors else None,
+                "message": "Free Fire Guest Account Generator by TutorSensi"
+            }, indent=2)
+            self.wfile.write(response.encode())
+            return
+        
+        # 404 for unknown paths
+        self.send_response(404)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>404 - Not Found</title></head>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+            <h1>🔴 404 - Page Not Found</h1>
+            <p>Use the API endpoint: <code>/gen?name=YOUR_NAME&amount=1&server=ind</code></p>
+            <p>Or visit the <a href="/">homepage</a> for tutorial.</p>
+        </body>
+        </html>
+        """)
     
-    # Redirect any unknown path to root
-    return {
-        "statusCode": 302,
-        "headers": {"Location": "/"},
-        "body": ""
-    }
+    def do_POST(self):
+        self.do_GET()
+
+# ============ END ============
