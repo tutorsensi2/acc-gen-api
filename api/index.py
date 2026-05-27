@@ -4,7 +4,8 @@ import time
 import random
 import base64
 import string
-from urllib.parse import parse_qs
+from http.server import BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 
 # ============ CONSTANTS ============
 CLIENT_SECRET = "2ee44819e9b4598845141067b281621874d0d5d7af9d8f7e00c1e54715b7d1e3"
@@ -101,7 +102,6 @@ def create_account(region, name_prefix):
     region_config = REGION_CONFIG.get(region, REGION_CONFIG['IND'])
     major_url = region_config['major_login_url']
     
-    # Simple payload (no encryption needed for basic response)
     payload_data = f"access_token={access_token}&open_id={open_id}"
     
     major_headers = {
@@ -129,52 +129,70 @@ def create_account(region, name_prefix):
         "account_id": account_id
     }
 
-# ============ CORRECT VERCEL HANDLER ============
-def handler(request, response=None):
-    """
-    Vercel Python runtime expects a function named 'handler'
-    that takes a request dict and returns a response dict.
-    """
-    # Parse query parameters
-    query = request.get('query', {})
-    name = query.get('name', ['TutorSensi'])[0][:9]
-    amount = query.get('amount', ['1'])[0]
-    server = query.get('server', ['ind'])[0]
+# ============ VERCEL HANDLER ============
+class handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
     
-    try:
-        count = min(max(1, int(amount)), 5)  # Max 5 to avoid timeout
-    except:
-        count = 1
+    def do_GET(self):
+        self.handle_request()
     
-    server_map = {
-        'bd': 'BD', 'ind': 'IND', 'pk': 'PK', 'id': 'ID',
-        'th': 'TH', 'vn': 'VN', 'br': 'BR', 'me': 'ME'
-    }
-    region = server_map.get(server.lower(), 'IND')
+    def do_POST(self):
+        self.handle_request()
     
-    accounts = []
-    errors = []
-    
-    for i in range(count):
+    def handle_request(self):
         try:
-            account = create_account(region, name)
-            accounts.append(account)
-            time.sleep(0.5)
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            
+            name = params.get('name', ['TutorSensi'])[0][:9]
+            amount = params.get('amount', ['1'])[0]
+            server = params.get('server', ['ind'])[0]
+            
+            try:
+                count = min(max(1, int(amount)), 5)  # Max 5 to avoid timeout
+            except:
+                count = 1
+            
+            server_map = {
+                'bd': 'BD', 'ind': 'IND', 'pk': 'PK', 'id': 'ID',
+                'th': 'TH', 'vn': 'VN', 'br': 'BR', 'me': 'ME'
+            }
+            region = server_map.get(server.lower(), 'IND')
+            
+            accounts = []
+            errors = []
+            
+            for i in range(count):
+                try:
+                    account = create_account(region, name)
+                    accounts.append(account)
+                    time.sleep(0.5)
+                except Exception as e:
+                    errors.append({"attempt": i + 1, "error": str(e)})
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            response = json.dumps({
+                "success": len(accounts) > 0,
+                "credit": "TutorSensi",
+                "region": region,
+                "total_generated": len(accounts),
+                "accounts": accounts,
+                "errors": errors if errors else None
+            })
+            self.wfile.write(response.encode())
+            
         except Exception as e:
-            errors.append({"attempt": i + 1, "error": str(e)})
-    
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-        },
-        "body": json.dumps({
-            "success": len(accounts) > 0,
-            "credit": "TutorSensi",
-            "region": region,
-            "total_generated": len(accounts),
-            "accounts": accounts,
-            "errors": errors if errors else None
-        })
-    }
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
