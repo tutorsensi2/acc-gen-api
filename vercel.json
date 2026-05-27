@@ -1,16 +1,7 @@
 {
-  "functions": {
-    "api/gen.py": {
-      "maxDuration": 30
-    }
-  },
   "routes": [
     {
       "src": "/gen",
-      "dest": "/api/gen.py"
-    },
-    {
-      "src": "/gen/(.*)",
       "dest": "/api/gen.py"
     }
   ]
