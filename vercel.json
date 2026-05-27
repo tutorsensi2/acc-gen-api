@@ -8,6 +8,10 @@
     {
       "src": "/gen",
       "dest": "/api/gen.py"
+    },
+    {
+      "src": "/gen/(.*)",
+      "dest": "/api/gen.py"
     }
   ]
 }
