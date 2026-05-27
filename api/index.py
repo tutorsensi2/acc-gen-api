@@ -129,6 +129,228 @@ def create_account(region, name_prefix):
         "account_id": account_id
     }
 
+# ============ HTML TUTORIAL PAGE ============
+HTML_TUTORIAL = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Fire Account Generator API | TutorSensi</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        .card {
+            background: rgba(255,255,255,0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin: 20px 0;
+            color: #333;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+        .endpoint {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+        .code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #667eea;
+            color: white;
+        }
+        .badge {
+            display: inline-block;
+            background: #48bb78;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            margin-right: 10px;
+        }
+        .badge.post {
+            background: #ed8936;
+        }
+        .footer {
+            text-align: center;
+            padding: 30px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 2rem; }
+            .card { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔥 Free Fire Account Generator API</h1>
+            <p>by <strong>TutorSensi</strong> | Free & Unlimited Guest Account Generation</p>
+        </div>
+
+        <div class="card">
+            <h2>📖 Tutorial</h2>
+            <p>This API allows you to generate Free Fire guest accounts programmatically. Just send a GET request with your parameters.</p>
+            
+            <h3>🔗 Endpoint</h3>
+            <div class="endpoint">
+                <span class="badge">GET</span> <strong>/gen</strong>
+            </div>
+            <p>Full URL: <code>https://your-domain.vercel.app/gen</code></p>
+
+            <h3>📝 Parameters</h3>
+            <table>
+                <thead>
+                    <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>name</code></td><td>string</td><td>TutorSensi</td><td>Account name prefix (max 9 chars)</td></tr>
+                    <tr><td><code>amount</code></td><td>integer</td><td>1</td><td>Number of accounts to generate (1-5)</td></tr>
+                    <tr><td><code>server</code></td><td>string</td><td>ind</td><td>Region: <code>ind, bd, pk, id, th, vn, br, me</code></td></tr>
+                </tbody>
+            </table>
+
+            <h3>🌍 Server Codes</h3>
+            <ul>
+                <li><code>ind</code> - India</li>
+                <li><code>bd</code> - Bangladesh</li>
+                <li><code>pk</code> - Pakistan</li>
+                <li><code>id</code> - Indonesia</li>
+                <li><code>th</code> - Thailand</li>
+                <li><code>vn</code> - Vietnam</li>
+                <li><code>br</code> - Brazil</li>
+                <li><code>me</code> - Middle East</li>
+            </ul>
+
+            <h3>📤 Example Request</h3>
+            <div class="code">
+                https://ff-api-tutorsensi.vercel.app/gen?name=Sensi&amount=2&server=ind
+            </div>
+
+            <h3>📥 Example Response</h3>
+            <div class="code">
+{
+  "success": true,
+  "credit": "TutorSensi",
+  "region": "IND",
+  "total_generated": 2,
+  "accounts": [
+    {
+      "uid": "123456789",
+      "password": "TUTOR_ABC12_SENSI_XYZ98",
+      "name": "Sensi⁴²⁰",
+      "region": "IND",
+      "account_id": "987654321"
+    }
+  ],
+  "errors": null
+}
+            </div>
+
+            <h3>⚠️ Error Handling</h3>
+            <p>If generation fails for some accounts, they will appear in the <code>errors</code> array. The API never refuses requests — if it crashes, Vercel will return a 500 error.</p>
+        </div>
+
+        <div class="card">
+            <h2>💻 Code Examples</h2>
+            
+            <h3>Python</h3>
+            <div class="code">
+import requests<br><br>
+response = requests.get('https://your-domain.vercel.app/gen', params={<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'name': 'Sensi',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'amount': 3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'server': 'ind'<br>
+})<br>
+print(response.json())
+            </div>
+
+            <h3>JavaScript (Node.js)</h3>
+            <div class="code">
+fetch('https://your-domain.vercel.app/gen?name=Sensi&amount=2&server=ind')<br>
+&nbsp;&nbsp;.then(res => res.json())<br>
+&nbsp;&nbsp;.then(data => console.log(data));
+            </div>
+
+            <h3>cURL</h3>
+            <div class="code">
+curl "https://your-domain.vercel.app/gen?name=Sensi&amount=1&server=ind"
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📁 Save Generated Accounts</h2>
+            <p>Use the API in your own script to save accounts to a file:</p>
+            <div class="code">
+import json, requests<br>
+data = requests.get('https://your-domain.vercel.app/gen?amount=10').json()<br>
+with open('accounts.json', 'w') as f:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;json.dump(data['accounts'], f, indent=2)
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Made with ❤️ by <strong>TutorSensi</strong> | Free Fire Guest Account Generator API</p>
+            <p>⚠️ For educational purposes only. Use responsibly.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 # ============ VERCEL HANDLER ============
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -139,14 +361,33 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
     
     def do_GET(self):
-        self.handle_request()
+        parsed = urlparse(self.path)
+        path = parsed.path
+        
+        # Serve HTML tutorial for root path or /api/index without query
+        if path in ['/', '/api/index', '/api/index/'] and not parsed.query:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(HTML_TUTORIAL.encode('utf-8'))
+            return
+        
+        # Handle /gen endpoint or any request with query parameters
+        if path in ['/gen', '/api/index'] or parsed.query:
+            self.handle_request(parsed)
+        else:
+            # Redirect to root for unknown paths
+            self.send_response(302)
+            self.send_header('Location', '/')
+            self.end_headers()
     
     def do_POST(self):
-        self.handle_request()
+        parsed = urlparse(self.path)
+        self.handle_request(parsed)
     
-    def handle_request(self):
+    def handle_request(self, parsed):
         try:
-            parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
             
             name = params.get('name', ['TutorSensi'])[0][:9]
