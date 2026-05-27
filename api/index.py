@@ -4,8 +4,7 @@ import time
 import random
 import base64
 import string
-from http.server import BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs
 
 # ============ CONSTANTS ============
 CLIENT_SECRET = "2ee44819e9b4598845141067b281621874d0d5d7af9d8f7e00c1e54715b7d1e3"
@@ -219,9 +218,6 @@ HTML_TUTORIAL = """<!DOCTYPE html>
             font-size: 0.8rem;
             margin-right: 10px;
         }
-        .badge.post {
-            background: #ed8936;
-        }
         .footer {
             text-align: center;
             padding: 30px;
@@ -351,77 +347,59 @@ with open('accounts.json', 'w') as f:<br>
 </html>
 """
 
-# ============ VERCEL HANDLER ============
-class handler(BaseHTTPRequestHandler):
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+# ============ CORRECT VERCEL HANDLER ============
+def handler(request, response=None):
+    """
+    Vercel Python runtime expects a function named 'handler'
+    that takes a request dict and returns a response dict.
+    """
+    path = request.get('path', '/')
+    method = request.get('method', 'GET')
+    query = request.get('query', {})
     
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
+    # Serve HTML tutorial for root path
+    if method == 'GET' and (path == '/' or path == '/api/index') and not query:
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "text/html; charset=utf-8"},
+            "body": HTML_TUTORIAL
+        }
+    
+    # Handle /gen endpoint
+    if path in ['/gen', '/api/index'] or query:
+        name = query.get('name', ['TutorSensi'])[0][:9]
+        amount = query.get('amount', ['1'])[0]
+        server = query.get('server', ['ind'])[0]
         
-        # Serve HTML tutorial for root path or /api/index without query
-        if path in ['/', '/api/index', '/api/index/'] and not parsed.query:
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(HTML_TUTORIAL.encode('utf-8'))
-            return
-        
-        # Handle /gen endpoint or any request with query parameters
-        if path in ['/gen', '/api/index'] or parsed.query:
-            self.handle_request(parsed)
-        else:
-            # Redirect to root for unknown paths
-            self.send_response(302)
-            self.send_header('Location', '/')
-            self.end_headers()
-    
-    def do_POST(self):
-        parsed = urlparse(self.path)
-        self.handle_request(parsed)
-    
-    def handle_request(self, parsed):
         try:
-            params = parse_qs(parsed.query)
-            
-            name = params.get('name', ['TutorSensi'])[0][:9]
-            amount = params.get('amount', ['1'])[0]
-            server = params.get('server', ['ind'])[0]
-            
+            count = min(max(1, int(amount)), 5)
+        except:
+            count = 1
+        
+        server_map = {
+            'bd': 'BD', 'ind': 'IND', 'pk': 'PK', 'id': 'ID',
+            'th': 'TH', 'vn': 'VN', 'br': 'BR', 'me': 'ME'
+        }
+        region = server_map.get(server.lower(), 'IND')
+        
+        accounts = []
+        errors = []
+        
+        for i in range(count):
             try:
-                count = min(max(1, int(amount)), 5)  # Max 5 to avoid timeout
-            except:
-                count = 1
-            
-            server_map = {
-                'bd': 'BD', 'ind': 'IND', 'pk': 'PK', 'id': 'ID',
-                'th': 'TH', 'vn': 'VN', 'br': 'BR', 'me': 'ME'
-            }
-            region = server_map.get(server.lower(), 'IND')
-            
-            accounts = []
-            errors = []
-            
-            for i in range(count):
-                try:
-                    account = create_account(region, name)
-                    accounts.append(account)
-                    time.sleep(0.5)
-                except Exception as e:
-                    errors.append({"attempt": i + 1, "error": str(e)})
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            
-            response = json.dumps({
+                account = create_account(region, name)
+                accounts.append(account)
+                time.sleep(0.5)
+            except Exception as e:
+                errors.append({"attempt": i + 1, "error": str(e)})
+        
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({
                 "success": len(accounts) > 0,
                 "credit": "TutorSensi",
                 "region": region,
@@ -429,11 +407,11 @@ class handler(BaseHTTPRequestHandler):
                 "accounts": accounts,
                 "errors": errors if errors else None
             })
-            self.wfile.write(response.encode())
-            
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+        }
+    
+    # Redirect any unknown path to root
+    return {
+        "statusCode": 302,
+        "headers": {"Location": "/"},
+        "body": ""
+    }
